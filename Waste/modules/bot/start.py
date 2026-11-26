@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 
@@ -16,7 +17,10 @@ log = logging.getLogger(__name__)
 user_sessions = {}
 active_sessions = []
 
-mongo_client = MongoClient(MONGO_URL)
+if not MONGO_URL:
+    raise RuntimeError("MONGO_URL is missing. Set your MongoDB Atlas connection string in the hosting environment.")
+
+mongo_client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
 db = mongo_client["SessionDB"]
 sessions_col = db["UserSessions"]
 subscriptions_col = db["Subscriptions"]
@@ -168,9 +172,15 @@ async def _send_start_or_force(client: Client, message: Message):
     return await client.send_photo(message.chat.id, START_PHOTO_URL, caption=_start_caption(message) + "\n\n" + WELCOME_TEXT, has_spoiler=True, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
 
 
-@app.on_message(filters.command("start", [".", "/"]) & filters.private)
+@app.on_message(filters.command("start", prefixes=["/", "."]) & filters.private)
 async def start_handler(client: Client, message: Message):
-    await _send_start_or_force(client, message)
+    if not message.from_user:
+        return
+    try:
+        await _send_start_or_force(client, message)
+    except Exception as exc:
+        log.exception("/start handler failed")
+        await message.reply_text("Welcome to Waste Userbot. Use /add to connect your Telegram account and /help for commands.")
 
 
 BOT_FORCE_TEXT = """<blockquote><tg-emoji emoji-id="5471952986970267163">✦</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b></blockquote>"""
@@ -395,17 +405,44 @@ async def clone(bot: Client, msg: Message):
     except Exception as e:
         await msg.reply(f"**ERROR:** `{e}`")
 
-@app.on_message(filters.command("add", ["/", "."]) & filters.private)
+@app.on_message(filters.command("add", prefixes=["/", "."]) & filters.private)
 async def add_session_command(client: Client, message: Message):
+    if not message.from_user:
+        return
     uid = message.from_user.id
-    if _session_doc(uid):
-        return await message.reply("⚠️ ʏᴏᴜ ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴛɪᴠᴇ sᴇssɪᴏɴ. ᴜsᴇ /remove ғɪʀsᴛ.")
-    await message.reply("📲 ᴘʟᴇᴀsᴇ sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ɪɴ ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ (e.g. +918200000009):")
+    if _session_doc(uid) or _is_userbot_active(uid):
+        return await message.reply_text("⚠️ Your account is already connected. Use /remove before connecting another account.")
+    if user_sessions.get(uid):
+        return await message.reply_text("⚠️ Login is already in progress. Send the requested code, or use /cancel to restart.")
     user_sessions[uid] = {"step": "awaiting_phone"}
+    await message.reply_text(
+        "📲 Send your phone number in international format, including country code (example: +919876543210).\n\nUse /cancel to stop login."
+    )
 
-@app.on_message(filters.command("remove", [".", "/"]) & filters.private)
+@app.on_message(filters.command("cancel", prefixes=["/", "."]) & filters.private)
+async def cancel_add_session(client: Client, message: Message):
+    if not message.from_user:
+        return
+    uid = message.from_user.id
+    pending = user_sessions.pop(uid, None)
+    if pending and pending.get("client"):
+        try:
+            await pending["client"].disconnect()
+        except Exception:
+            pass
+    await message.reply_text("Login cancelled." if pending else "There is no login in progress.")
+
+@app.on_message(filters.command("remove", prefixes=["/", "."]) & filters.private)
 async def remove_session(client: Client, msg: Message):
+    if not msg.from_user:
+        return
     uid = msg.from_user.id
+    pending = user_sessions.pop(uid, None)
+    if pending and pending.get("client"):
+        try:
+            await pending["client"].disconnect()
+        except Exception:
+            pass
     for hosted in list(active_sessions):
         if getattr(hosted, "_waste_owner_uid", None) == uid or hosted.name == f"AutoClone_{uid}":
             try:
@@ -416,7 +453,7 @@ async def remove_session(client: Client, msg: Message):
     result = sessions_col.delete_one({"_id": uid})
     await msg.reply(f"{_pe(PE_USER)} ʏᴏᴜʀ sᴇssɪᴏɴ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ." if result.deleted_count else f"{_pe(PE_USER)} ɴᴏ ᴀᴄᴛɪᴠᴇ sᴇssɪᴏɴ ғᴏᴜɴᴅ.", parse_mode=enums.ParseMode.HTML)
 
-@app.on_message()
+@app.on_message(filters.private & filters.incoming)
 async def session_handler(client: Client, msg: Message):
     if not msg.from_user or not msg.text:
         return
@@ -428,7 +465,9 @@ async def session_handler(client: Client, msg: Message):
         return
     step = session.get("step")
     if step == "awaiting_phone":
-        phone = msg.text.strip()
+        phone = msg.text.strip().replace(" ", "")
+        if not re.fullmatch(r"\+[1-9]\d{7,14}", phone):
+            return await msg.reply_text("❌ Invalid phone number. Send it with country code, e.g. +919876543210.")
         temp = Client(name=f"gen_{uid}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
         session.update({"phone": phone, "client": temp})
         try:
@@ -444,8 +483,11 @@ async def session_handler(client: Client, msg: Message):
             user_sessions.pop(uid, None)
     elif step == "awaiting_otp":
         temp = session["client"]
+        otp = re.sub(r"[\s-]", "", msg.text)
+        if not otp.isdigit():
+            return await msg.reply_text("❌ OTP should contain digits only. Please send the Telegram login code again.")
         try:
-            await temp.sign_in(phone_number=session["phone"], phone_code_hash=session["phone_code_hash"], phone_code=msg.text.strip().replace(" ", ""))
+            await temp.sign_in(phone_number=session["phone"], phone_code_hash=session["phone_code_hash"], phone_code=otp)
         except SessionPasswordNeeded:
             session["step"] = "awaiting_2fa"
             return await msg.reply("🔐 sᴇɴᴅ ʏᴏᴜʀ 2FA ᴘᴀssᴡᴏʀᴅ.")
