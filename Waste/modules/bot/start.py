@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import re
 from datetime import datetime, timedelta, timezone
 from html import escape
 
@@ -10,107 +9,50 @@ from pyrogram.errors import SessionPasswordNeeded, PhoneCodeExpired, PhoneCodeIn
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaVideo, InputMediaPhoto
 from pymongo import MongoClient
 
-from config import OWNER_ID, MONGO_URL
+from config import OWNER_ID, ALIVE_PIC, MONGO_URL
 from Waste import app, API_ID, API_HASH
 
 log = logging.getLogger(__name__)
 user_sessions = {}
 active_sessions = []
 
-if not MONGO_URL:
-    raise RuntimeError("MONGO_URL is missing. Set your MongoDB Atlas connection string in the hosting environment.")
-
-mongo_client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
+mongo_client = MongoClient(MONGO_URL)
 db = mongo_client["SessionDB"]
 sessions_col = db["UserSessions"]
 subscriptions_col = db["Subscriptions"]
 settings_col = db["UserSettings"]
 recordings_col = db["UserRecordings"]
 
-def _session_doc(uid):
-    return sessions_col.find_one({"_id": uid})
-
-
-def _normalize_username(value: str):
-    value = str(value or "").strip()
-    if value.startswith("@"):
-        value = value[1:]
-    return value or None
-
-
-async def _resolve_subscription_target(client: Client, args):
-    """Resolve subscription target from either Telegram user ID or username.
-
-    Supported:
-      /subscription 123456789
-      /subscription @username
-      /subscription username
-      /subscription 123456789 username
-    The database is always keyed by numeric Telegram user ID.
-    """
-    if not args:
-        return None, None
-
-    raw = str(args[0]).strip()
-    username = None
-
-    # Numeric Telegram ID: use it directly; optional username is only metadata.
-    if raw.lstrip("-").isdigit():
-        uid = int(raw)
-        if len(args) > 1:
-            username = _normalize_username(args[1])
-        return uid, username
-
-    # Username target: resolve it through Telegram and store the numeric ID.
-    username = _normalize_username(raw)
-    if not username:
-        return None, None
-    try:
-        user = await client.get_users(username)
-        uid = int(user.id)
-        return uid, username
-    except Exception:
-        return None, username
-
 OWNER_USERNAME = "day1Nomore"
 SUPPORT_USERNAME = "wasteBotz"
 FORCE_SUPPORT = "wasteBotz"
 FORCE_UPDATES = "wasteuserbotUpdates"
-START_PHOTO_URL = "https://plain-apac-prod-public.komododecks.com/202611/25/cQTIRE8h2N1ggaUGIEna/image.png"
 START_VIDEO_URL = "https://www.image2url.com/r2/default/videos/1795028137883-50dbfe05-30ea-4fdd-bee6-9918b92c79db.mp4"
 
 # Premium custom-emoji IDs requested for the WASTE X UBOT UI.
 PE_USER = 5471952986970267163
 PE_COMMAND = 5445284980978621387
-PE_SUPPORT = 5471952986970267163
+PE_SUPPORT = 5445284980978621387
 PE_VERIFIED = 5226512880362332956
+PE_PAGE = 5226512880362332956
+PE_MAIN = 5989975649740134220
+PE_NEXT = 5992269308305084799
 
-def _pe(eid, fallback="✦"):
+def _pe(eid, fallback="·"):
     return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 
-# Waste WordSeek Solver start menu. Telegram inline keyboards do not expose
-# per-button background colors; row order and labels are configurable only.
+# Start-menu buttons are defined here so /start never depends on the legacy
+# Data object, which does not contain the old buttons in this build.
 START_BUTTONS = [
-    [InlineKeyboardButton("𝖶𝖺𝗌𝗍𝖾", url="https://t.me/wasteBotz"), InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾𝗌", url="https://t.me/wasteuserbotUpdates")],
-    [InlineKeyboardButton("𝖵𝖾𝗋𝗂𝖿𝗂𝖾𝖽", callback_data="start_force_check")],
-    [InlineKeyboardButton("𝖧𝖾𝗅𝗉", callback_data="wordseek_help"), InlineKeyboardButton("𝖮𝗐𝗇𝖾𝗋", url="https://t.me/day1nomore")],
+    [InlineKeyboardButton("𝙒𝙖𝙨𝙩𝙚 ↗", url="https://t.me/wasteBotz"), InlineKeyboardButton("𝙐𝙥𝙙𝙖𝙩𝙚𝙨 ↗", url="https://t.me/wasteuserbotUpdates")],
+    [InlineKeyboardButton("𝙃𝙚𝙡𝙥", callback_data="help"), InlineKeyboardButton("𝙊𝙬𝙣𝙚𝙧 ↗", url="https://t.me/day1Nomore")],
 ]
+
 HOME_BUTTONS = START_BUTTONS
 
-WELCOME_TEXT = """<blockquote>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝗍𝗈 𝗒𝗈𝗎𝗋 𝖶𝖺𝗌𝗍𝖾 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄𝖾𝗋 𝖲𝗈𝗅𝗏𝖾 𝖡𝗈𝗍!
-
-𝖳𝗁𝗂𝗌 𝖡𝗈𝗍 𝖶𝗂𝗅𝗅 𝖣𝗈 𝖠𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼 𝖶𝗈𝗋𝖽 𝖦𝗎𝖾𝗌𝗌𝗂𝗇𝗀.
-
-𝖨𝖿 𝖸𝗈𝗎 𝖠𝗅𝗌𝗈 𝖶𝖺𝗇𝗍 𝖳𝗈 𝖳𝗈𝗉 𝖳𝗁𝖾 𝖫𝖾𝖺𝖽𝖾𝗋𝖻𝗈𝖺𝗋𝖽, 𝖳𝗁𝖾𝗇 𝖴𝗌𝖾 𝖮𝗎𝗋 𝖶𝖺𝗌𝗍𝖾-𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋 𝖡𝗈𝗍 𝖠𝗇𝖽 𝖢𝗈𝗇𝗇𝖾𝖼𝗍 𝖸𝗈𝗎𝗋 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖶𝗂𝗍𝗁 /𝖺𝖽𝖽</blockquote>"""
-
-WORDSEEK_HELP_TEXT = """<blockquote>𝖶𝖺𝗌𝗍𝖾-𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋 𝖧𝖾𝗅𝗉
-
-.auto4 — 𝟦-𝗅𝖾𝗍𝗍𝖾𝗋 𝖶𝗈𝗋𝖽𝖲𝖾𝖾𝗄 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼𝖺𝗅𝗅𝗒 𝗌𝗍𝖺𝗋𝗍 𝖺𝗇𝖽 𝗌𝗈𝗅𝗏𝖾.
-.auto5 — 𝟧-𝗅𝖾𝗍𝗍𝖾𝗋 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼𝖺𝗅𝗅𝗒 𝗌𝗍𝖺𝗋𝗍 𝖺𝗇𝖽 𝗌𝗈𝗅𝗏𝖾.
-.auto6 — 𝟨-𝗅𝖾𝗍𝗍𝖾𝗋 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼𝖺𝗅𝗅𝗒 𝗌𝗍𝖺𝗋𝗍 𝖺𝗇𝖽 𝗌𝗈𝗅𝗏𝖾.
-.stop — 𝖲𝗍𝗈𝗉 𝖺𝗅𝗅 𝖺𝖼𝗍𝗂𝗏𝖾 𝖶𝗈𝗋𝖽𝖲𝖾𝖾𝗄 𝖺𝗎𝗍𝗈 𝗋𝗎𝗇𝗌 𝖿𝗈𝗋 𝗍𝗁𝗂𝗌 𝖺𝖼𝖼𝗈𝗎𝗇𝗍.
-
-𝖢𝗈𝗇𝗇𝖾𝖼𝗍 𝗒𝗈𝗎𝗋 𝖺𝖼𝖼𝗈𝗎𝗇𝗍 𝗐𝗂𝗍𝗁 /add 𝗂𝗇 𝖻𝗈𝗍 𝖣𝖬. 𝖳𝗁𝖾𝗇 𝗎𝗌𝖾 𝗍𝗁𝖾 𝖺𝗎𝗍𝗈 𝖼𝗈𝗆𝗆𝖺𝗇𝖽𝗌 𝗂𝗇 𝗍𝗁𝖾 𝗀𝗋𝗈𝗎𝗉 𝗐𝗁𝖾𝗋𝖾 𝖶𝗈𝗋𝖽𝖲𝖾𝖾𝗄 𝗂𝗌 𝖺𝖼𝗍𝗂𝗏𝖾.</blockquote>"""
+ABOUT_TEXT = "<blockquote><tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ</b>\n\n<tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ᴘᴏᴡᴇʀғᴜʟ ᴛᴇʟᴇɢʀᴀᴍ ᴜsᴇʀʙᴏᴛ ᴡɪᴛʜ ᴍᴜsɪᴄ, ᴠᴄғɪɢʜᴛ, ᴜᴛɪʟɪᴛɪᴇs ᴀɴᴅ ᴀᴜᴛᴏᴍᴀᴛɪᴏɴ.</b></blockquote>"
+DONATE_TEXT = ABOUT_TEXT
+GUIDE_TEXT = "<blockquote><tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ＢＡＳＩＣ ＧＵＩＤＥ</b>\n\n<tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ᴜsᴇ <code>/add</code> ᴛᴏ ʟᴏɢɪɴ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ.</b>\n<tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ᴀғᴛᴇʀ ᴄᴏɴɴᴇᴄᴛɪɴɢ, ᴜsᴇ <code>/help</code> ᴛᴏ ᴏᴘᴇɴ ᴛʜᴇ ғᴜʟʟ ᴄᴏᴍᴍᴀɴᴅ ᴍᴇɴᴜ.</b>\n<tg-emoji emoji-id=\"5471952986970267163\">·</tg-emoji> <b>ᴄᴏᴍᴍᴀɴᴅs ᴄᴀɴ ʙᴇ ᴜsᴇᴅ ᴡɪᴛʜ . ᴏʀ / ᴡʜᴇʀᴇ sᴜᴘᴘᴏʀᴛᴇᴅ.</b></blockquote>"
 
 def _started_name(message: Message) -> str:
     user = getattr(message, "from_user", None)
@@ -122,26 +64,37 @@ def _started_name(message: Message) -> str:
 def _is_userbot_active(uid: int) -> bool:
     return any(getattr(c, "_waste_owner_uid", None) == uid for c in active_sessions)
 
-def _start_caption(message: Message) -> str:
-    user = getattr(message, "from_user", None)
-    uid = getattr(user, "id", 0)
+def _normal_welcome(message: Message) -> str:
     name = _started_name(message)
-    doc = _session_doc(uid) if uid else None
-    connected = bool(doc and doc.get("session"))
-    status = "Active" if connected and _is_userbot_active(uid) else "Inactive"
-    account = f"\n𝖨𝖣 : <code>{doc.get('user_id', uid)}</code>" if connected else "\n𝖨𝖣 : Not connected — use /add"
-    status_text = "✅ 𝖠𝖼𝗍𝗂𝗏𝖾" if status == "Active" else "❌ 𝖨𝗇𝖺𝖼𝗍𝗂𝗏𝖾"
-    return f"<blockquote>⚡ 𝖶𝖺𝗌𝗍𝖾 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋\n\n👤 𝖴𝗌𝖾𝗋 : {name}{account}\n💎 𝖲𝗍𝖺𝗍𝗎𝗌 : {status_text}\n\n🚀 𝖶𝖾𝗅𝖼𝗈𝗆𝖾! 𝖣𝖾𝗉𝗅𝗈𝗒 𝖸𝗈𝗎𝗋 𝖯𝖾𝗋𝗌𝗈𝗇𝖺𝗅 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝖾 𝖨𝗇𝗌𝗍𝖺𝗇𝗍𝗅𝗒 𝖶𝗂𝗍𝗁 𝖲𝖾𝖼𝗎𝗋𝖾 𝖮𝖳𝖯 𝖫𝗈𝗀𝗂𝗇.</blockquote>"
+    return f"<blockquote><b>Welcome to your Waste Wordseeker Solver Bot!</b>\n\nThis Bot Will Do Automatic Word Guessing.\n\nIf You Also Want To Top The Leaderboard, Then Use Our Waste-Wordseek Solver Bot And Connect Your Account With <code>/add</code></blockquote>"
+
+
+def _start_caption(message: Message) -> str:
+    uid = getattr(getattr(message, "from_user", None), "id", 0)
+    name = _started_name(message)
+    status = "✅ 𝖠𝖼𝗍𝗂𝗏𝖾" if _is_userbot_active(uid) else "❌ 𝖨𝗇𝖺𝖼𝗍𝗂𝗏𝖾"
+    return f"""<blockquote>⚡ <b>𝖶𝖺𝗌𝗍𝖾 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋</b>
+
+👤 <b>𝖴𝗌𝖾𝗋 : {name}</b>
+<b>𝖨𝖣 : {uid}</b>
+💎 <b>𝖲𝗍𝖺𝗍𝗎𝗌 : {status}</b>
+
+🚀 <b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾! 𝖣𝖾𝗉𝗅𝗈𝗒 𝖸𝗈𝗎𝗋 𝖯𝖾𝗋𝗌𝗈𝗇𝖺𝗅 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋 𝖨𝗇𝗌𝗍𝖺𝗇𝗍𝗅𝗒 𝖶𝗂𝗍𝗁 𝖲𝖾𝖼𝗎𝗋𝖾 𝖮𝖳𝖯 𝖫𝗈𝗀𝗂𝗇.</b></blockquote>"""
 
 
 def _force_caption(message: Message) -> str:
-    user = getattr(message, "from_user", None)
-    uid = getattr(user, "id", 0)
+    uid = getattr(getattr(message, "from_user", None), "id", 0)
     name = _started_name(message)
-    doc = _session_doc(uid) if uid else None
-    connected = bool(doc and doc.get("session"))
-    status = "Active" if connected and _is_userbot_active(uid) else "Inactive"
-    return f"<blockquote>⚡ 𝖶𝖺𝗌𝗍𝖾 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋\n\n👤 𝖴𝗌𝖾𝗋 : {name}\n💎 𝖲𝗍𝖺𝗍𝗎𝗌 : {'✅ 𝖠𝖼𝗍𝗂𝗏𝖾' if status == 'Active' else '❌ 𝖨𝗇𝖺𝖼𝗍𝗂𝗏𝖾'}\n\n🚀 𝖶𝖾𝗅𝖼𝗈𝗆𝖾! 𝖣𝖾𝗉𝗅𝗈𝗒 𝖸𝗈𝗎𝗋 𝖯𝖾𝗋𝗌𝗈𝗇𝖺𝗅 𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝖾 𝖨𝗇𝗌𝗍𝖺𝗇𝗍𝗅𝗒 𝖶𝗂𝗍𝗁 𝖲𝖾𝖼𝗎𝗋𝖾 𝖮𝖳𝖯 𝖫𝗈𝗀𝗂𝗇.\n\n𝖩𝗈𝗂𝗇 𝗍𝗁𝖾 𝖼𝗁𝖺𝗇𝗇𝖾𝗅𝗌 𝖻𝖾𝗅𝗈𝗐, 𝗍𝗁𝖾𝗇 𝗍𝖺𝗉 𝖵𝖾𝗋𝗂𝖿𝗂𝖾𝖽.</blockquote>"
+    status = "ᴀᴄᴛɪᴠᴇ" if _is_userbot_active(uid) else "ɪɴᴀᴄᴛɪᴠᴇ"
+    return f"""<blockquote>{_pe(PE_USER)} <b>ＷＡＳＴＥ Ｘ 𝐔𝐒𝐄𝐑𝐁𝐎𝐓 𝐇𝐎𝐒𝐓</b>
+
+{_pe(PE_USER)} <b>ᴜꜱᴇʀ : {name}</b>
+{_pe(PE_USER)} <b>ꜱᴛᴀᴛᴜꜱ : {status}</b>
+
+{_pe(PE_USER)} <b>ᴡᴇʟᴄᴏᴍᴇ! ᴅᴇᴘʟᴏʏ ʏᴏᴜʀ ᴘᴇʀꜱᴏɴᴀʟ ᴜꜱᴇʀʙᴏᴛ ɪɴꜱᴛᴀɴᴛʟʏ ᴡɪᴛʜ ꜱᴇᴄᴜʀᴇ ᴏᴛᴘ ʟᴏɢɪɴ.</b>
+
+{_pe(PE_SUPPORT)} <b>ᴊᴏɪɴ ʙᴏᴛʜ ᴏғғɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟs ᴛᴏ ᴜɴʟᴏᴄᴋ ᴀᴄᴄᴇss.</b>
+{_pe(PE_VERIFIED)} <b>ᴀғᴛᴇʀ ᴊᴏɪɴɪɴɢ, ᴛᴀᴘ ᴠᴇʀɪғɪᴇᴅ ᴛᴏ ᴄʜᴇᴄᴋ ᴀɢᴀɪɴ.</b></blockquote>"""
 
 
 async def _force_joined(client: Client, user_id: int) -> bool:
@@ -161,29 +114,33 @@ async def _force_joined(client: Client, user_id: int) -> bool:
 
 def _force_markup():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("𝖶𝖺𝗌𝗍𝖾", url="https://t.me/wasteBotz"), InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾𝗌", url="https://t.me/wasteuserbotUpdates")],
-        [InlineKeyboardButton("𝖵𝖾𝗋𝗂𝖿𝗂𝖾𝖽", callback_data="start_force_check")],
+        [InlineKeyboardButton("𝙨𝙪𝙥𝙥𝙤𝙧𝙩 ↗", url="https://t.me/wasteBotz")],
+        [InlineKeyboardButton("𝙪𝙥𝙙𝙖𝙩𝙚𝙨 ↗", url="https://t.me/wasteuserbotUpdates")],
+        [InlineKeyboardButton("𝙫𝙚𝙧𝙞𝙛𝙞𝙚𝙙", callback_data="start_force_check")],
     ])
 
 
 async def _send_start_or_force(client: Client, message: Message):
+    # Always show the simple WordSeek welcome first. Force-join links are kept
+    # exclusively in the separate gate message, not in this welcome screen.
+    await client.send_message(message.chat.id, _normal_welcome(message), parse_mode=enums.ParseMode.HTML)
     if not await _force_joined(client, message.from_user.id):
-        return await client.send_message(message.chat.id, _force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML)
-    return await client.send_photo(message.chat.id, START_PHOTO_URL, caption=_start_caption(message) + "\n\n" + WELCOME_TEXT, has_spoiler=True, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
-
-
-@app.on_message(filters.command("start", prefixes=["/", "."]) & filters.private)
-async def start_handler(client: Client, message: Message):
-    if not message.from_user:
-        return
+        try:
+            return await client.send_video(message.chat.id, START_VIDEO_URL, caption=_force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML, supports_streaming=True)
+        except Exception:
+            return await client.send_message(message.chat.id, _force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML)
     try:
-        await _send_start_or_force(client, message)
-    except Exception as exc:
-        log.exception("/start handler failed")
-        await message.reply_text("Welcome to Waste Userbot. Use /add to connect your Telegram account and /help for commands.")
+        return await client.send_photo(message.chat.id, ALIVE_PIC, caption=_start_caption(message), reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
+    except Exception:
+        return await client.send_message(message.chat.id, _start_caption(message), reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
 
 
-BOT_FORCE_TEXT = """<blockquote><tg-emoji emoji-id="5471952986970267163">✦</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b></blockquote>"""
+@app.on_message(filters.command("start", [".", "/"]) & filters.private)
+async def start_handler(client: Client, message: Message):
+    await _send_start_or_force(client, message)
+
+
+BOT_FORCE_TEXT = """<blockquote><tg-emoji emoji-id="5471952986970267163">·</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b></blockquote>"""
 
 FORCE_COMMANDS = [
     "Autopic", "admin", "afk", "animation", "anime_cf", "antipm", "autoscroll", "banall", "birthday", "broadcast", "carbon", "clone",
@@ -199,10 +156,10 @@ def _bot_force_page_text(page):
     chunks = [FORCE_COMMANDS[i:i+11] for i in range(0, 55, 11)] + [FORCE_COMMANDS[55:]]
     chunk = chunks[max(0, min(int(page), total - 1))]
     # Only the requested header and command list are shown.
-    lines = ['<blockquote><tg-emoji emoji-id="5471952986970267163">✦</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b>', '']
+    lines = ['<blockquote><tg-emoji emoji-id="5471952986970267163">·</tg-emoji> <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b>', '']
     for name in chunk:
-        lines.append(f'<tg-emoji emoji-id="5445284980978621387">✦</tg-emoji> <b>{_ser_name(name)}</b>')
-    lines.append(f'<tg-emoji emoji-id="5226512880362332956">✦</tg-emoji> <b>ᴘᴀɢᴇ {int(page)+1}/6</b>')
+        lines.append(f'<tg-emoji emoji-id="{PE_COMMAND}">·</tg-emoji> <b>{_ser_name(name)}</b>')
+    lines.append(f'<tg-emoji emoji-id="{PE_PAGE}">·</tg-emoji> <b>ᴘᴀɢᴇ {int(page)+1}/6</b>')
     lines.append('</blockquote>')
     return '\n'.join(lines)
 
@@ -210,11 +167,9 @@ def _ser_name(name):
     # Mathematical Sans Bold Italic style requested for command labels.
     mapping = str.maketrans({
         'a':'𝙖','b':'𝙗','c':'𝙘','d':'𝙙','e':'𝙚','f':'𝙛','g':'𝙜','h':'𝙝','i':'𝙞','j':'𝙟','k':'𝙠','l':'𝙡','m':'𝙢',
-        'n':'𝙣','o':'𝙤','p':'𝙥','q':'𝙦','r':'𝙧','s':'𝙨','t':'𝙩','u':'𝙪','v':'𝙫','w':'𝙬','x':'𝙭','y':'𝙮','z':'𝙯',
-        'A':'𝙰','B':'𝙱','C':'𝙲','D':'𝙳','E':'𝙴','F':'𝙵','G':'𝙶','H':'𝙷','I':'𝙸','J':'𝙹','K':'𝙺','L':'𝙻','M':'𝙼',
-        'N':'𝙽','O':'𝙾','P':'𝙿','Q':'𝚀','R':'𝚁','S':'𝚂','T':'𝚃','U':'𝚄','V':'𝚅','W':'𝚆','X':'𝚇','Y':'𝚈','Z':'𝚉'
+        'n':'𝙣','o':'𝙤','p':'𝙥','q':'𝙦','r':'𝙧','s':'𝙨','t':'𝙩','u':'𝙪','v':'𝙫','w':'𝙬','x':'𝙭','y':'𝙮','z':'𝙯'
     })
-    return str(name).lower().translate(mapping)
+    return str(name).translate(mapping)
 
 def _bot_force_keyboard(page=0):
     page = max(0, min(int(page), 5))
@@ -228,8 +183,8 @@ def _bot_force_keyboard(page=0):
         rows.append(row)
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("𝙥𝙧𝙚𝙫", callback_data=f"botforce:page:{page-1}"))
-    nav.append(InlineKeyboardButton(f"ᴘᴀɢᴇ {page+1}/6", callback_data="botforce:noop"))
+        nav.append(InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data=f"botforce:page:{page-1}"))
+    nav.append(InlineKeyboardButton(f"𝙥𝙖𝙜𝙚 {page+1}/6", callback_data="botforce:noop"))
     if page < 5:
         nav.append(InlineKeyboardButton("𝙣𝙚𝙭𝙩", callback_data=f"botforce:page:{page+1}"))
     rows.append(nav)
@@ -244,8 +199,14 @@ def _bot_force_media_kwargs():
 @app.on_message(filters.command("force", [".", "/"]) & filters.private)
 async def force_handler(client: Client, message: Message):
     if not await _force_joined(client, message.from_user.id):
-        return await client.send_message(message.chat.id, _force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML)
-    return await client.send_photo(message.chat.id, START_PHOTO_URL, caption=_start_caption(message) + "\n\n" + WELCOME_TEXT, has_spoiler=True, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
+        try:
+            return await client.send_video(message.chat.id, START_VIDEO_URL, caption=_force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML, supports_streaming=True)
+        except Exception:
+            return await client.send_message(message.chat.id, _force_caption(message), reply_markup=_force_markup(), parse_mode=enums.ParseMode.HTML)
+    try:
+        return await client.send_video(message.chat.id, START_VIDEO_URL, caption=_bot_force_page_text(0), reply_markup=_bot_force_keyboard(0), parse_mode=enums.ParseMode.HTML, supports_streaming=True)
+    except Exception:
+        return await client.send_message(message.chat.id, _bot_force_page_text(0), reply_markup=_bot_force_keyboard(0), parse_mode=enums.ParseMode.HTML)
 
 
 @app.on_callback_query(filters.regex(r"^botforce:"))
@@ -258,7 +219,7 @@ async def bot_force_callback(client: Client, query: CallbackQuery):
         try:
             return await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=_bot_force_page_text(0), parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=_bot_force_keyboard(0))
         except Exception:
-            return await query.message.edit_text(BOT_FORCE_TEXT, reply_markup=_bot_force_keyboard(0), parse_mode=enums.ParseMode.HTML)
+            return await query.message.edit_text(_bot_force_page_text(0), reply_markup=_bot_force_keyboard(0), parse_mode=enums.ParseMode.HTML)
     if data.startswith("page:"):
         page = int(data.split(":", 1)[1])
         try:
@@ -286,19 +247,13 @@ async def start_force_check(client: Client, query: CallbackQuery):
         return
     await query.answer("Verified successfully")
     try:
-        await query.message.edit_media(InputMediaPhoto(START_PHOTO_URL, caption=_start_caption(query) + "\n\n" + WELCOME_TEXT, parse_mode=enums.ParseMode.HTML, has_spoiler=True), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
+        await query.message.edit_media(InputMediaPhoto(ALIVE_PIC, caption=_start_caption(query), parse_mode=enums.ParseMode.HTML), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
     except Exception:
-        await query.message.edit_caption(_start_caption(query) + "\n\n" + WELCOME_TEXT, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
+        await query.message.edit_text(_start_caption(query), reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
 
 @app.on_message(filters.command("about", [".", "/"]) & filters.private)
 async def about_command(client: Client, message: Message):
     await message.reply_text(ABOUT_TEXT, reply_markup=InlineKeyboardMarkup(HOME_BUTTONS))
-
-
-@app.on_callback_query(filters.regex(r"^wordseek_help$"))
-async def wordseek_help_callback(client: Client, query: CallbackQuery):
-    await query.answer()
-    await query.message.edit_caption(WORDSEEK_HELP_TEXT, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝖧𝗈𝗆𝖾", callback_data="home")]]), parse_mode=enums.ParseMode.HTML)
 
 @app.on_callback_query(filters.regex(r"^(home|help|force_menu|about|donate|guide)$"))
 async def callback_handler(client: Client, query: CallbackQuery):
@@ -306,31 +261,81 @@ async def callback_handler(client: Client, query: CallbackQuery):
     data = query.data
     if data == "home":
         try:
-            await query.message.edit_media(InputMediaPhoto(START_PHOTO_URL, caption=_start_caption(query) + "\n\n" + WELCOME_TEXT, parse_mode=enums.ParseMode.HTML, has_spoiler=True), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
+            await query.message.edit_media(InputMediaPhoto(ALIVE_PIC, caption=_start_caption(query), parse_mode=enums.ParseMode.HTML), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
         except Exception:
-            await query.message.edit_caption(_start_caption(query) + "\n\n" + WELCOME_TEXT, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
+            await query.message.edit_text(_start_caption(query), reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
     elif data in {"help", "force_menu"}:
-        await query.message.edit_caption(WORDSEEK_HELP_TEXT, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝖧𝗈𝗆𝖾", callback_data="home")]]), parse_mode=enums.ParseMode.HTML)
-    elif data == "about":
         try:
-            await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=ABOUT_TEXT, parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=InlineKeyboardMarkup(HOME_BUTTONS))
+            await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=_bot_force_page_text(0), parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=_bot_force_keyboard(0))
         except Exception:
-            await query.message.edit_caption(ABOUT_TEXT, reply_markup=InlineKeyboardMarkup(HOME_BUTTONS), parse_mode=enums.ParseMode.HTML)
+            await query.message.edit_text(BOT_FORCE_TEXT, reply_markup=_bot_force_keyboard(0), parse_mode=enums.ParseMode.HTML)
+    elif data == "about":
+        await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=ABOUT_TEXT, parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=InlineKeyboardMarkup(HOME_BUTTONS))
     elif data == "donate":
         await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=DONATE_TEXT, parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
     elif data == "guide":
-        try:
-            await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=GUIDE_TEXT, parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
-        except Exception:
-            await query.message.edit_caption(GUIDE_TEXT, reply_markup=InlineKeyboardMarkup(START_BUTTONS), parse_mode=enums.ParseMode.HTML)
+        await query.message.edit_media(InputMediaVideo(START_VIDEO_URL, caption=GUIDE_TEXT, parse_mode=enums.ParseMode.HTML, supports_streaming=True), reply_markup=InlineKeyboardMarkup(START_BUTTONS))
+
+@app.on_message(filters.command(["play", "vplay"], [".", "/"]) & filters.group)
+async def group_play_command(client: Client, message: Message):
+    parts = message.text.split(None, 1) if message.text else []
+    query = parts[1].strip() if len(parts) > 1 else ""
+    if not query:
+        return await message.reply_text(f"{_pe(PE_USER)} <b>ᴜsᴀɢᴇ: /play song name</b>", parse_mode=enums.ParseMode.HTML)
+    if not active_sessions:
+        return await message.reply_text(f"{_pe(PE_USER)} <b>ɴᴏ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ɪs ᴏɴʟɪɴᴇ ʀɪɢʜᴛ ɴᴏᴡ.</b>", parse_mode=enums.ParseMode.HTML)
+
+    hosted = None
+    # The bot is only the control interface. Prefer the connected account
+    # belonging to the person who issued the command, then fall back to an
+    # account that is a member of the group.
+    requester_id = message.from_user.id if message.from_user else None
+    if requester_id is not None:
+        for candidate in list(active_sessions):
+            if getattr(candidate, "_waste_owner_uid", None) == requester_id:
+                hosted = candidate
+                break
+    if hosted is None:
+        for candidate in list(active_sessions):
+            try:
+                member = await candidate.get_chat_member(message.chat.id, "me")
+                status = getattr(member.status, "value", member.status)
+                if status not in {"left", "kicked", "banned"}:
+                    hosted = candidate
+                    break
+            except Exception:
+                continue
+    hosted = hosted or active_sessions[0]
+
+    status = await message.reply_text(f"{_pe(PE_USER)} <b>sᴇᴀʀᴄʜɪɴɢ ʏᴏᴜᴛᴜʙᴇ...</b>", parse_mode=enums.ParseMode.HTML)
+    path = None
+    try:
+        from Waste.modules.basic.playvc import play_song_in_chat
+        path, info, queued = await play_song_in_chat(hosted, message.chat.id, query)
+        title = info.get("title") or query
+        duration = info.get("duration_string") or "Unknown"
+        if queued:
+            await status.edit_text(f"{_pe(PE_USER)} <b>ǫᴜᴇᴜᴇᴅ</b>\n\n{_pe(PE_USER)} <b>{escape(str(title))}</b>\n{_pe(PE_USER)} <b>{escape(str(duration))}</b>", parse_mode=enums.ParseMode.HTML)
+        else:
+            await status.edit_text(f"{_pe(PE_USER)} <b>ɴᴏᴡ ᴘʟᴀʏɪɴɢ</b>\n\n{_pe(PE_USER)} <b>{escape(str(title))}</b>\n{_pe(PE_USER)} <b>{escape(str(duration))}</b>\n{_pe(PE_USER)} <b>ᴘʟᴀʏɪɴɢ ɪɴ ᴛʜɪs ɢʀᴏᴜᴘs ᴠᴏɪᴄᴇ ᴄʜᴀᴛ</b>", parse_mode=enums.ParseMode.HTML)
+    except Exception as exc:
+        await status.edit_text(f"{_pe(PE_USER)} <b>ᴍᴜsɪᴄ ғᴀɪʟᴇᴅ: <code>{escape(type(exc).__name__)}</code></b>\n\n<code>{escape(str(exc)[:500])}</code>", parse_mode=enums.ParseMode.HTML)
+    finally:
+        if path:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+
 
 @app.on_message(filters.command("subscription", [".", "/"]) & filters.private & filters.user(OWNER_ID))
 async def subscription_cmd(client: Client, message: Message):
     if len(message.command) < 2:
-        return await message.reply_text("Usage: /subscription <user_id|@username> [username]")
-    uid, username = await _resolve_subscription_target(client, message.command[1:])
+        return await message.reply_text("Usage: /subscription <user_id> [username]")
+    uid, username = _parse_target(message.command[1:])
     if uid is None:
-        return await message.reply_text(f"{_pe(PE_USER)} <b>ᴜsᴇʀ ɪᴅ ʀᴇǫᴜɪʀᴇᴅ.</b> ᴇxᴀᴍᴘʟᴇ: /subscription 123456789 username")
+        return await message.reply_text(f"{_pe(PE_COMMAND)} <b>ᴜsᴇʀ ɪᴅ ʀᴇǫᴜɪʀᴇᴅ.</b> ᴇxᴀᴍᴘʟᴇ: <code>/subscription 123456789 username</code>", parse_mode="html")
     expires = datetime.now(timezone.utc) + timedelta(days=30)
     subscriptions_col.update_one({"_id": uid}, {"$set": {"user_id": uid, "username": username or "", "expires_at": expires, "activated_at": datetime.now(timezone.utc)}}, upsert=True)
     # Restart premium background features immediately if this account is online.
@@ -348,18 +353,18 @@ async def subscription_cmd(client: Client, message: Message):
             except Exception as exc:
                 log.warning("Could not refresh promotion state for %s: %s", uid, exc)
     try:
-        await client.send_message(uid, f"{_pe(PE_USER)} **Subscription Activated**\n\nYour Promotion subscription is active for **30 days**.")
+        await client.send_message(uid, f"{_pe(PE_USER)} <b>sᴜʙsᴄʀɪᴘᴛɪᴏɴ ᴀᴄᴛɪᴠᴀᴛᴇᴅ</b>\n\nᴛʜᴇ ᴘʀᴏᴍᴏᴛɪᴏɴ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ɪs ᴀᴄᴛɪᴠᴇ ғᴏʀ <b>30 ᴅᴀʏs</b>.", parse_mode="html")
     except Exception as exc:
         log.warning("Could not notify subscriber %s: %s", uid, exc)
-    await message.reply_text(f"{_pe(PE_USER)} Subscription activated for `{uid}` for 30 days.\n{_pe(PE_USER)} Expires: `{expires.isoformat()}`")
+    await message.reply_text(f"{_pe(PE_COMMAND)} <b>sᴜʙsᴄʀɪᴘᴛɪᴏɴ ᴀᴄᴛɪᴠᴀᴛᴇᴅ</b> ғᴏʀ <code>{uid}</code> ғᴏʀ 30 ᴅᴀʏs.\nᴇxᴘɪʀᴇs: <code>{expires.isoformat()}</code>", parse_mode="html")
 
 @app.on_message(filters.command("disubscription", [".", "/"]) & filters.private & filters.user(OWNER_ID))
 async def disubscription_cmd(client: Client, message: Message):
     if len(message.command) < 2:
-        return await message.reply_text("Usage: /disubscription <user_id|@username> [username]")
-    uid, username = await _resolve_subscription_target(client, message.command[1:])
+        return await message.reply_text("Usage: /disubscription <user_id> [username]")
+    uid, username = _parse_target(message.command[1:])
     if uid is None:
-        return await message.reply_text(f"{_pe(PE_USER)} <b>ᴜsᴇʀ ɪᴅ ʀᴇǫᴜɪʀᴇᴅ.</b>")
+        return await message.reply_text(f"{_pe(PE_COMMAND)} <b>ᴜsᴇʀ ɪᴅ ʀᴇǫᴜɪʀᴇᴅ.</b>", parse_mode="html")
     result = subscriptions_col.delete_one({"_id": uid})
     settings_col.update_one({"_id": uid}, {"$set": {"allvc_auto": False, "autotextpromo": False}}, upsert=True)
     for hosted in list(active_sessions):
@@ -376,10 +381,10 @@ async def disubscription_cmd(client: Client, message: Message):
             except Exception as exc:
                 log.warning("Could not disable promotion mode for %s: %s", uid, exc)
     try:
-        await client.send_message(uid, f"{_pe(PE_USER)} **Subscription Deactivated**\n\nYour Promotion subscription has ended. Contact @day1Nomore to reactivate it.")
+        await client.send_message(uid, f"{_pe(PE_USER)} <b>sᴜʙsᴄʀɪᴘᴛɪᴏɴ ᴅᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ</b>\n\nʏᴏᴜʀ ᴘʀᴏᴍᴏᴛɪᴏɴ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ʜᴀs ᴇɴᴅᴇᴅ. ᴄᴏɴᴛᴀᴄᴛ @day1Nomore ᴛᴏ ʀᴇᴀᴄᴛɪᴠᴀᴛᴇ ɪᴛ.", parse_mode="html")
     except Exception as exc:
         log.warning("Could not notify unsubscribed user %s: %s", uid, exc)
-    await message.reply_text(f"{_pe(PE_USER)} Subscription removed." if result.deleted_count else f"{_pe(PE_USER)} No active subscription found.")
+    await message.reply_text(f"{_pe(PE_COMMAND)} <b>{"sᴜʙsᴄʀɪᴘᴛɪᴏɴ ʀᴇᴍᴏᴠᴇᴅ." if result.deleted_count else "ɴᴏ ᴀᴄᴛɪᴠᴇ sᴜʙsᴄʀɪᴘᴛɪᴏɴ ғᴏᴜɴᴅ."}</b>", parse_mode="html")
 
 @app.on_message(filters.command("clone", [".", "/"]) & filters.private)
 async def clone(bot: Client, msg: Message):
@@ -401,48 +406,49 @@ async def clone(bot: Client, msg: Message):
             await start_autotextpromo_if_enabled(client)
         except Exception as exc:
             log.warning("Clone background start failed: %s", exc)
-        await msg.reply(f"{_pe(PE_USER)} ɴᴏᴡ ʏᴏᴜ ᴀʀᴇ ʀᴇᴀᴅʏ ᴛᴏ ғɪɢʜᴛ\n\n{_pe(PE_USER)} ᴀᴄᴄᴏᴜɴᴛ sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴅᴅᴇᴅ\n\n{_pe(PE_USER)} {escape(str(user.first_name))}")
+        await msg.reply(f"{_pe(PE_USER)} <b>ɴᴏᴡ ʏᴏᴜ ᴀʀᴇ ʀᴇᴀᴅʏ ᴛᴏ ғɪɢʜᴛ</b>\n\n{_pe(PE_USER)} <b>ᴀᴄᴄᴏᴜɴᴛ sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴅᴅᴇᴅ</b>\n\n{_pe(PE_USER)} <b>{escape(user.first_name)}</b>", parse_mode="html")
     except Exception as e:
         await msg.reply(f"**ERROR:** `{e}`")
 
-@app.on_message(filters.command("add", prefixes=["/", "."]) & filters.private)
+@app.on_message(filters.regex(r"^[./]add(?:@\w+)?(?:\s+.*)?$", flags=0) & filters.private)
 async def add_session_command(client: Client, message: Message):
-    if not message.from_user:
-        return
     uid = message.from_user.id
-    if _session_doc(uid) or _is_userbot_active(uid):
-        return await message.reply_text("⚠️ Your account is already connected. Use /remove before connecting another account.")
-    if user_sessions.get(uid):
-        return await message.reply_text("⚠️ Login is already in progress. Send the requested code, or use /cancel to restart.")
+    if _session_doc(uid):
+        return await message.reply(f"{_pe(PE_USER)} ʏᴏᴜ ᴀʟʀᴇᴀᴅʏ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴛɪᴠᴇ sᴇssɪᴏɴ. ᴜsᴇ /remove ғɪʀsᴛ.", parse_mode=enums.ParseMode.HTML)
+    # A previous expired/failed login must never leave a stale wizard behind.
+    old = user_sessions.pop(uid, None)
+    if old and old.get("client"):
+        try:
+            await old["client"].disconnect()
+        except Exception:
+            pass
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) == 2 and args[1].strip():
+        user_sessions[uid] = {"step": "awaiting_phone"}
+        # Reuse the normal wizard by handling the supplied number below.
+        phone_msg = message
+        phone_text = args[1].strip()
+        if phone_text.startswith("+") and phone_text[1:].isdigit() and 8 <= len(phone_text) <= 16:
+            temp = Client(name=f"gen_{uid}", api_id=API_ID, api_hash=API_HASH, in_memory=True, device_model="Waste", app_version="1.0")
+            user_sessions[uid].update({"phone": phone_text, "client": temp})
+            try:
+                await temp.connect()
+                sent = await temp.send_code(phone_text)
+                user_sessions[uid]["phone_code_hash"] = sent.phone_code_hash
+                user_sessions[uid]["step"] = "awaiting_otp"
+                return await message.reply(f"{_pe(PE_USER)} ᴏᴛᴘ sᴇɴᴛ! sᴇɴᴅ ɪᴛ ʟɪᴋᴇ: <code>1 2 3 4 5</code>", parse_mode=enums.ParseMode.HTML)
+            except Exception as e:
+                try: await temp.disconnect()
+                except Exception: pass
+                user_sessions.pop(uid, None)
+                return await message.reply(f"{_pe(PE_USER)} ᴏᴛᴘ ᴇʀʀᴏʀ: <code>{escape(str(e))}</code>\nᴘʟᴇᴀsᴇ ᴜsᴇ /add ᴀɢᴀɪɴ.", parse_mode=enums.ParseMode.HTML)
+        return await message.reply(f"{_pe(PE_USER)} ɪɴᴠᴀʟɪᴅ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ. sᴇɴᴅ ɪᴛ ʟɪᴋᴇ: <code>+918200000009</code>", parse_mode=enums.ParseMode.HTML)
+    await message.reply(f"{_pe(PE_USER)} ᴘʟᴇᴀsᴇ sᴇɴᴅ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ɪɴ ɪɴᴛᴇʀɴᴀᴛɪᴏɴᴀʟ ғᴏʀᴍᴀᴛ (ᴇ.ɢ. <code>+918200000009</code>):", parse_mode=enums.ParseMode.HTML)
     user_sessions[uid] = {"step": "awaiting_phone"}
-    await message.reply_text(
-        "📲 Send your phone number in international format, including country code (example: +919876543210).\n\nUse /cancel to stop login."
-    )
 
-@app.on_message(filters.command("cancel", prefixes=["/", "."]) & filters.private)
-async def cancel_add_session(client: Client, message: Message):
-    if not message.from_user:
-        return
-    uid = message.from_user.id
-    pending = user_sessions.pop(uid, None)
-    if pending and pending.get("client"):
-        try:
-            await pending["client"].disconnect()
-        except Exception:
-            pass
-    await message.reply_text("Login cancelled." if pending else "There is no login in progress.")
-
-@app.on_message(filters.command("remove", prefixes=["/", "."]) & filters.private)
+@app.on_message(filters.command("remove", [".", "/"]) & filters.private)
 async def remove_session(client: Client, msg: Message):
-    if not msg.from_user:
-        return
     uid = msg.from_user.id
-    pending = user_sessions.pop(uid, None)
-    if pending and pending.get("client"):
-        try:
-            await pending["client"].disconnect()
-        except Exception:
-            pass
     for hosted in list(active_sessions):
         if getattr(hosted, "_waste_owner_uid", None) == uid or hosted.name == f"AutoClone_{uid}":
             try:
@@ -453,11 +459,16 @@ async def remove_session(client: Client, msg: Message):
     result = sessions_col.delete_one({"_id": uid})
     await msg.reply(f"{_pe(PE_USER)} ʏᴏᴜʀ sᴇssɪᴏɴ ʀᴇᴍᴏᴠᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ." if result.deleted_count else f"{_pe(PE_USER)} ɴᴏ ᴀᴄᴛɪᴠᴇ sᴇssɪᴏɴ ғᴏᴜɴᴅ.", parse_mode=enums.ParseMode.HTML)
 
-@app.on_message(filters.private & filters.incoming)
+@app.on_message()
 async def session_handler(client: Client, msg: Message):
     if not msg.from_user or not msg.text:
         return
-    if msg.text.strip().startswith(("/", ".")):
+    # Do not let the catch-all login wizard consume bot commands.
+    # Without this guard, /add itself can be seen again by this handler
+    # immediately after the /add handler sets awaiting_phone, causing
+    # "/add" to be sent to Telegram as if it were a phone number.
+    stripped = msg.text.strip()
+    if stripped.startswith(("/", ".")):
         return
     uid = msg.from_user.id
     session = user_sessions.get(uid)
@@ -466,33 +477,36 @@ async def session_handler(client: Client, msg: Message):
     step = session.get("step")
     if step == "awaiting_phone":
         phone = msg.text.strip().replace(" ", "")
-        if not re.fullmatch(r"\+[1-9]\d{7,14}", phone):
-            return await msg.reply_text("❌ Invalid phone number. Send it with country code, e.g. +919876543210.")
-        temp = Client(name=f"gen_{uid}", api_id=API_ID, api_hash=API_HASH, in_memory=True)
+        if not phone.startswith("+") or not phone[1:].isdigit() or len(phone) < 8 or len(phone) > 16:
+            return await msg.reply(f"{_pe(PE_USER)} ɪɴᴠᴀʟɪᴅ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ. sᴇɴᴅ ɪᴛ ʟɪᴋᴇ: <code>+918200000009</code>", parse_mode=enums.ParseMode.HTML)
+        temp = Client(name=f"gen_{uid}", api_id=API_ID, api_hash=API_HASH, in_memory=True, device_model="Waste", app_version="1.0")
         session.update({"phone": phone, "client": temp})
         try:
             await temp.connect()
             sent = await temp.send_code(phone)
             session["phone_code_hash"] = sent.phone_code_hash
             session["step"] = "awaiting_otp"
-            await msg.reply("📨 OTP sᴇɴᴛ! sᴇɴᴅ ɪᴛ ʟɪᴋᴇ: `1 2 3 4 5`")
+            await msg.reply(f"{_pe(PE_USER)} ᴏᴛᴘ sᴇɴᴛ! sᴇɴᴅ ɪᴛ ʟɪᴋᴇ: <code>1 2 3 4 5</code>", parse_mode=enums.ParseMode.HTML)
         except Exception as e:
-            await msg.reply(f"❌ OTP error: `{e}`\nPlease use /add again.")
+            await msg.reply(f"{_pe(PE_USER)} ᴏᴛᴘ ᴇʀʀᴏʀ: <code>{escape(str(e))}</code>\nᴘʟᴇᴀsᴇ ᴜsᴇ /add ᴀɢᴀɪɴ.", parse_mode=enums.ParseMode.HTML)
             try: await temp.disconnect()
             except Exception: pass
             user_sessions.pop(uid, None)
     elif step == "awaiting_otp":
         temp = session["client"]
-        otp = re.sub(r"[\s-]", "", msg.text)
-        if not otp.isdigit():
-            return await msg.reply_text("❌ OTP should contain digits only. Please send the Telegram login code again.")
         try:
-            await temp.sign_in(phone_number=session["phone"], phone_code_hash=session["phone_code_hash"], phone_code=otp)
+            await temp.sign_in(phone_number=session["phone"], phone_code_hash=session["phone_code_hash"], phone_code=msg.text.strip().replace(" ", ""))
         except SessionPasswordNeeded:
             session["step"] = "awaiting_2fa"
-            return await msg.reply("🔐 sᴇɴᴅ ʏᴏᴜʀ 2FA ᴘᴀssᴡᴏʀᴅ.")
+            return await msg.reply(f"{_pe(PE_USER)} sᴇɴᴅ ʏᴏᴜʀ 2ғᴀ ᴘᴀssᴡᴏʀᴅ.", parse_mode=enums.ParseMode.HTML)
+        except (PhoneCodeExpired, PhoneCodeInvalid) as e:
+            await msg.reply(f"{_pe(PE_USER)} ᴏᴛᴘ ʟᴏɢɪɴ ғᴀɪʟᴇᴅ: <code>{escape(str(e))}</code>\nᴘʟᴇᴀsᴇ ᴜsᴇ /add ᴀɢᴀɪɴ.", parse_mode=enums.ParseMode.HTML)
+            try: await temp.disconnect()
+            except Exception: pass
+            user_sessions.pop(uid, None)
+            return
         except Exception as e:
-            await msg.reply(f"❌ Login failed: `{e}`\nPlease use /add again.")
+            await msg.reply(f"{_pe(PE_USER)} ʟᴏɢɪɴ ғᴀɪʟᴇᴅ: <code>{escape(str(e))}</code>\nᴘʟᴇᴀsᴇ ᴜsᴇ /add ᴀɢᴀɪɴ.", parse_mode=enums.ParseMode.HTML)
             try: await temp.disconnect()
             except Exception: pass
             user_sessions.pop(uid, None)
@@ -504,7 +518,7 @@ async def session_handler(client: Client, msg: Message):
             await temp.check_password(msg.text.strip())
             await finalize_login(temp, msg, uid)
         except Exception as e:
-            await msg.reply(f"❌ Incorrect 2FA password: `{e}`\nPlease use /add again.")
+            await msg.reply(f"{_pe(PE_USER)} ɪɴᴄᴏʀʀᴇᴄᴛ 2ғᴀ ᴘᴀssᴡᴏʀᴅ: <code>{escape(str(e))}</code>\nᴘʟᴇᴀsᴇ ᴜsᴇ /add ᴀɢᴀɪɴ.", parse_mode=enums.ParseMode.HTML)
             try: await temp.disconnect()
             except Exception: pass
             user_sessions.pop(uid, None)
@@ -541,8 +555,11 @@ async def start_hosted_session(uid, string, notify=False):
         await start_autotextpromo_if_enabled(hosted)
     except Exception as exc:
         log.warning("Promotion background start failed for %s: %s", uid, exc)
-    # No background group/channel joining or bot-starting is performed after login.
-    # Users can choose which chats and bots to join/start themselves.
+    try:
+        from Waste.modules.basic.auto_setup import run_after_connect
+        asyncio_task = __import__("asyncio").create_task(run_after_connect(hosted))
+    except Exception as exc:
+        log.warning("Post-connect setup failed for %s: %s", uid, exc)
     if notify:
         try:
             await app.send_message(uid, f"{_pe(PE_USER)} <b>ᴜsᴇʀʙᴏᴛ ᴄᴏɴɴᴇᴄᴛᴇᴅ</b>\n\n{_pe(PE_USER)} ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ɪs ɴᴏᴡ ᴏɴʟɪɴᴇ ᴡɪᴛʜ ᴛʜᴇ ᴡᴀsᴛᴇ x ᴜsᴇʀʙᴏᴛ ғᴇᴀᴛᴜʀᴇs.", parse_mode=enums.ParseMode.HTML)

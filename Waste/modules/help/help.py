@@ -4,49 +4,15 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from Waste import app, CMD_HELP, SUDO_USER
 from config import ALIVE_PIC
 
-FORCE_VIDEO_URL = "https://www.image2url.com/r2/default/videos/1794758121681-9a91954b-c9c6-4323-9fd0-9bf9e42ed0fa.mp4"
-PE = lambda eid, fallback="✦": f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
+FORCE_VIDEO_URL = "https://www.image2url.com/r2/default/videos/1795028137883-50dbfe05-30ea-4fdd-bee6-9918b92c79db.mp4"
+PE = lambda eid, fallback="·": f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
 PE_USER = 5471952986970267163
-PE_COMMAND = 5992095761561554607
+PE_COMMAND = 5445284980978621387
 PE_SUPPORT = 5445284980978621387
 PE_VERIFIED = 5226512880362332956
-
-HELP_MENU = f"""<blockquote>{PE(PE_USER)} <b>| ❁ ＷＡＳＴＥ Ｘ ＵＢＯＴ - ʜᴇʟᴘ ᴍᴇɴᴜ ❁ |</b>
-
-{PE(PE_COMMAND)} <b>Autopic</b>  {PE(PE_COMMAND)} <b>admin</b>
-{PE(PE_COMMAND)} <b>afk</b>  {PE(PE_COMMAND)} <b>animation</b>
-{PE(PE_COMMAND)} <b>anime_cf</b>  {PE(PE_COMMAND)} <b>antipm</b>
-{PE(PE_COMMAND)} <b>autoscroll</b>  {PE(PE_COMMAND)} <b>banall</b>
-{PE(PE_COMMAND)} <b>birthday</b>  {PE(PE_COMMAND)} <b>broadcast</b>
-{PE(PE_COMMAND)} <b>carbon</b>  {PE(PE_COMMAND)} <b>clone</b>
-{PE(PE_COMMAND)} <b>create</b>  {PE(PE_COMMAND)} <b>destruct</b>
-{PE(PE_COMMAND)} <b>dictionary</b>  {PE(PE_COMMAND)} <b>dmspam</b>
-{PE(PE_COMMAND)} <b>emoji</b>  {PE(PE_COMMAND)} <b>flirt</b>
-{PE(PE_COMMAND)} <b>globals</b>  {PE(PE_COMMAND)} <b>google</b>
-{PE(PE_COMMAND)} <b>info</b>  {PE(PE_COMMAND)} <b>invite</b>
-{PE(PE_COMMAND)} <b>joinleave</b>  {PE(PE_COMMAND)} <b>locks</b>
-{PE(PE_COMMAND)} <b>memify</b>  {PE(PE_COMMAND)} <b>mention</b>
-{PE(PE_COMMAND)} <b>metrics</b>  {PE(PE_COMMAND)} <b>paste</b>
-{PE(PE_COMMAND)} <b>pats</b>  {PE(PE_COMMAND)} <b>ping</b>
-{PE(PE_COMMAND)} <b>profile</b>  {PE(PE_COMMAND)} <b>purge</b>
-{PE(PE_COMMAND)} <b>quotly</b>  {PE(PE_COMMAND)} <b>raid</b>
-{PE(PE_COMMAND)} <b>replyraid</b>  {PE(PE_COMMAND)} <b>restart</b>
-{PE(PE_COMMAND)} <b>sangmata</b>  {PE(PE_COMMAND)} <b>screenshot</b>
-{PE(PE_COMMAND)} <b>spam</b>  {PE(PE_COMMAND)} <b>start</b>
-{PE(PE_COMMAND)} <b>stats</b>  {PE(PE_COMMAND)} <b>sticker</b>
-{PE(PE_COMMAND)} <b>stickers</b>  {PE(PE_COMMAND)} <b>sudos</b>
-{PE(PE_COMMAND)} <b>tag</b>  {PE(PE_COMMAND)} <b>tagalert</b>
-{PE(PE_COMMAND)} <b>tagall</b>  {PE(PE_COMMAND)} <b>text</b>
-{PE(PE_COMMAND)} <b>tiny</b>  {PE(PE_COMMAND)} <b>translate</b>
-{PE(PE_COMMAND)} <b>truth-dare</b>  {PE(PE_COMMAND)} <b>update</b>
-{PE(PE_COMMAND)} <b>upload</b>  {PE(PE_COMMAND)} <b>vctools</b>
-{PE(PE_COMMAND)} <b>vulgar</b>  {PE(PE_COMMAND)} <b>waifu</b>
-{PE(PE_COMMAND)} <b>weather</b>  {PE(PE_COMMAND)} <b>VcFight</b>
-{PE(PE_COMMAND)} <b>promotion</b>  {PE(PE_COMMAND)} <b>aichat</b>
-{PE(PE_COMMAND)} <b>Music</b>  {PE(PE_COMMAND)} <b>VcTalk</b>
-{PE(PE_COMMAND)} <b>ReactionPlus</b>  {PE(PE_COMMAND)} <b>AutoTextPromo</b>
-
-{PE(PE_SUPPORT)} <b>@wasteBotz</b>  ×  <b>@wasteuserbotUpdates</b></blockquote>"""
+PE_PAGE = 5226512880362332956
+PE_MAIN = 5989975649740134220
+PE_NEXT = 5992269308305084799
 
 FORCE_TEXT = f"""<blockquote>{PE(PE_USER)} <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b></blockquote>"""
 
@@ -62,23 +28,35 @@ FORCE_COMMANDS = [
     "memify", "mention", "metrics", "paste", "pats", "ping", "profile", "purge", "quotly", "raid", "replyraid", "restart",
     "sangmata", "screenshot", "spam", "start", "stats", "sticker", "stickers", "sudos", "tag", "tagalert", "tagall", "text",
     "tiny", "translate", "truth-dare", "update", "upload", "vctools", "vulgar", "waifu", "weather", "VcFight", "promotion", "aichat",
-    "Music", "VcTalk", "ReactionPlus", "AutoTextPromo"
+    "Music", "AutoTextPromo"
 ]
+
 
 def _ser_name(name):
     mapping = str.maketrans({
         'a':'𝙖','b':'𝙗','c':'𝙘','d':'𝙙','e':'𝙚','f':'𝙛','g':'𝙜','h':'𝙝','i':'𝙞','j':'𝙟','k':'𝙠','l':'𝙡','m':'𝙢',
-        'n':'𝙣','o':'𝙤','p':'𝙥','q':'𝙦','r':'𝙧','s':'𝙨','t':'𝙩','u':'𝙪','v':'𝙫','w':'𝙬','x':'𝙭','y':'𝙮','z':'𝙯',
-        'A':'𝙰','B':'𝙱','C':'𝙲','D':'𝙳','E':'𝙴','F':'𝙵','G':'𝙶','H':'𝙷','I':'𝙸','J':'𝙹','K':'𝙺','L':'𝙻','M':'𝙼',
-        'N':'𝙽','O':'𝙾','P':'𝙿','Q':'𝚀','R':'𝚁','S':'𝚂','T':'𝚃','U':'𝚄','V':'𝚅','W':'𝚆','X':'𝚇','Y':'𝚈','Z':'𝚉'
+        'n':'𝙣','o':'𝙤','p':'𝙥','q':'𝙦','r':'𝙧','s':'𝙨','t':'𝙩','u':'𝙪','v':'𝙫','w':'𝙬','x':'𝙭','y':'𝙮','z':'𝙯'
     })
     return str(name).translate(mapping)
+
+def _help_menu_text():
+    lines = [f"<blockquote>{PE(PE_USER)} <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — 𝙝𝙚𝙡𝙥 𝙢𝙚𝙣𝙪</b>", ""]
+    for i in range(0, len(FORCE_COMMANDS), 2):
+        row = f"{PE(PE_COMMAND)} <b>{_ser_name(FORCE_COMMANDS[i])}</b>"
+        if i + 1 < len(FORCE_COMMANDS):
+            row += f"  {PE(PE_COMMAND)} <b>{_ser_name(FORCE_COMMANDS[i+1])}</b>"
+        lines.append(row)
+    lines.append(f"{PE(PE_SUPPORT)} <b>@wasteBotz</b>  ×  <b>@wasteuserbotUpdates</b></blockquote>")
+    return "\n".join(lines)
+
+HELP_MENU = _help_menu_text()
 
 def _force_page_text(page=0):
     page = max(0, min(int(page), 5))
     chunks = [FORCE_COMMANDS[i:i+11] for i in range(0, 55, 11)] + [FORCE_COMMANDS[55:]]
     lines = [f"<blockquote>{PE(PE_COMMAND)} <b>ＷＡＳＴＥ Ｘ ＵＢＯＴ — ꜰᴏʀᴄᴇ ᴄᴏᴍᴍᴀɴᴅs</b>", ""]
     lines.extend(f"{PE(PE_COMMAND)} <b>{_ser_name(name)}</b>" for name in chunks[page])
+    lines.append(f"{PE(PE_PAGE)} <b>𝙥𝙖𝙜𝙚 {page+1}/6</b>  {PE(PE_NEXT)} <b>𝙣𝙚𝙭𝙩</b>  {PE(PE_MAIN)} <b>𝙢𝙖𝙞𝙣 𝙢𝙚𝙣𝙪</b>")
     lines.append("</blockquote>")
     return "\n".join(lines)
 
@@ -94,12 +72,12 @@ def _force_keyboard(page=0):
         rows.append(row)
     nav=[]
     if page > 0:
-        nav.append(InlineKeyboardButton("ʙᴀᴄᴋ", callback_data=f"force_page:{page-1}"))
-    nav.append(InlineKeyboardButton(f"ᴘᴀɢᴇ {page+1}/6", callback_data="force_noop"))
+        nav.append(InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data=f"force_page:{page-1}"))
+    nav.append(InlineKeyboardButton(f"𝙥𝙖𝙜𝙚 {page+1}/6", callback_data="force_noop"))
     if page < 5:
-        nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"force_page:{page+1}"))
+        nav.append(InlineKeyboardButton("𝙣𝙚𝙭𝙩", callback_data=f"force_page:{page+1}"))
     rows.append(nav)
-    rows.append([InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="force_help")])
+    rows.append([InlineKeyboardButton("𝙢𝙖𝙞𝙣 𝙢𝙚𝙣𝙪", callback_data="force_help")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -114,9 +92,9 @@ def _recordings_keyboard():
 
 def _force_join_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Ｓᴜᴘᴘᴏʀᴛ", url="https://t.me/wasteBotz")],
-        [InlineKeyboardButton("Ｕᴘᴅᴀᴛᴇs", url="https://t.me/wasteuserbotUpdates")],
-        [InlineKeyboardButton("Ｖᴇʀɪғɪᴇᴅ", callback_data="force_check")],
+        [InlineKeyboardButton("𝙨𝙪𝙥𝙥𝙤𝙧𝙩 ↗", url="https://t.me/wasteBotz")],
+        [InlineKeyboardButton("𝙪𝙥𝙙𝙖𝙩𝙚𝙨 ↗", url="https://t.me/wasteuserbotUpdates")],
+        [InlineKeyboardButton("𝙫𝙚𝙧𝙞𝙛𝙞𝙚𝙙", callback_data="force_check")],
     ])
 
 
@@ -159,10 +137,7 @@ async def _send_force_join(client, message):
     try:
         await message.reply_video(FORCE_VIDEO_URL, caption=text, reply_markup=_force_join_keyboard(), parse_mode=enums.ParseMode.HTML, supports_streaming=True)
     except Exception:
-        try:
-            await message.reply_photo(ALIVE_PIC, caption=text, reply_markup=_force_join_keyboard(), parse_mode=enums.ParseMode.HTML)
-        except Exception:
-            await message.reply_text(text, reply_markup=_force_join_keyboard(), parse_mode=enums.ParseMode.HTML)
+        await message.reply_text(text, reply_markup=_force_join_keyboard(), parse_mode=enums.ParseMode.HTML)
 
 
 def _group_help_keyboard():
@@ -209,12 +184,11 @@ MODULE_FALLBACKS = {
         ("vctalk status", "Show VC Talk status."),
     ],
     "ReactionPlus": [
-        ("mmar on 😂😭😑🤣💔🖕🍌", "React to your own messages with the selected emoji pool."),
+        ("mmar on selected reactions", "React to your own messages with the selected emoji pool."),
         ("mmar off", "Disable reactions on your own messages."),
         ("omar on @username", "Target a user and react to their messages."),
-        ("omar on", "Target a user by ID and react to their messages."),
-        ("omar on (reply)", "Reply to a user's message and enable reactions for that user."),
-        ("omar off", "Disable target-user reactions."),
+        ("omar on 123456789", "Target a user by ID and react to their messages."),
+        ("omar off", "Disable target reactions."),
     ],
 }
 
@@ -294,7 +268,7 @@ def _module_text(key):
         commands = dict(MODULE_FALLBACKS.get(key, []))
     if not commands:
         return f"<blockquote>{PE(PE_USER)} <b>{key}</b>\n\nNo command details are registered for this module yet.</blockquote>"
-    lines = [f"<blockquote>{PE(PE_USER)} <b>❖ {key.upper()} COMMANDS</b></blockquote>", ""]
+    lines = [f"<blockquote>{PE(PE_USER)} <b>{PE(PE_COMMAND)} {_ser_name(key)} 𝙘𝙤𝙢𝙢𝙖𝙣𝙙𝙨</b></blockquote>", ""]
     for command, desc in commands.items():
         command = str(command).strip()
         if command.startswith((".", "/")):
@@ -306,7 +280,7 @@ def _module_text(key):
     return "\n".join(lines)
 
 
-@Client.on_message(filters.command("force", [".", "/"]) & filters.me)
+@Client.on_message(filters.command("force", [".", "/"]) & (filters.me | filters.user(SUDO_USER)))
 async def force_command(client, message):
     is_private = bool(message.chat and getattr(message.chat.type, "value", message.chat.type) == "private")
     if is_private and not await _joined(client, message.from_user.id if message.from_user else (await client.get_me()).id):
@@ -317,28 +291,14 @@ async def force_command(client, message):
         return await message.reply_text(_force_page_text(0), reply_markup=_force_keyboard(0), parse_mode=enums.ParseMode.HTML)
 
 
-@Client.on_message((filters.group | filters.private) & (filters.incoming | filters.me) & filters.command(["help", "helpme"], [".", "/"]))
+@Client.on_message(filters.command(["help", "helpme"], [".", "/"]) & (filters.me | filters.user(SUDO_USER)))
 async def module_help(client: Client, message: Message):
-    # .help is intentionally available in both private chats and groups.
-    # Do not require filters.me or a hosted-owner marker here: the connected
-    # userbot must be able to answer .help sent by any member in a group,
-    # while still using the connected account to send the reply.
     help_arg = " ".join(message.command[1:]).strip() if len(message.command) > 1 else ""
     is_private = bool(message.chat and getattr(message.chat.type, "value", message.chat.type) == "private")
-    # Connected user accounts get a focused WordSeek command guide on .help.
-    if message.outgoing and not help_arg:
-        return await message.reply_text(
-            "<blockquote>𝖶𝖺𝗌𝗍𝖾-𝖶𝗈𝗋𝖽𝗌𝖾𝖾𝗄 𝖲𝗅𝗈𝗏𝖾𝗋 𝖧𝖾𝗅𝗉\n\n"
-            ".auto4 — 𝟦-𝗅𝖾𝗍𝗍𝖾𝗋 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈 𝗌𝗍𝖺𝗋𝗍 + 𝗌𝗈𝗅𝗏𝖾\n"
-            ".auto5 — 𝟧-𝗅𝖾𝗍𝗍𝖾𝗋 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈 𝗌𝗍𝖺𝗋𝗍 + 𝗌𝗈𝗅𝗏𝖾\n"
-            ".auto6 — 𝟨-𝗅𝖾𝗍𝗍𝖾𝗋 𝗀𝖺𝗆𝖾 𝖺𝗎𝗍𝗈 𝗌𝗍𝖺𝗋𝗍 + 𝗌𝗈𝗅𝗏𝖾\n"
-            ".stop — 𝖲𝗍𝗈𝗉 𝖺𝗅𝗅 𝖺𝖼𝗍𝗂𝗏𝖾 𝖺𝗎𝗍𝗈 𝗋𝗎𝗇𝗌 𝖿𝗈𝗋 𝗍𝗁𝗂𝗌 𝖺𝖼𝖼𝗈𝗎𝗇𝗍\n\n"
-            "𝖠𝖿𝗍𝖾𝗋 𝖺 𝗐𝗂𝗇, 𝗍𝗁𝖾 𝖻𝗈𝗍 𝗌𝗍𝖺𝗋𝗍𝗌 𝗍𝗁𝖾 𝗇𝖾𝗑𝗍 𝗀𝖺𝗆𝖾 𝗂𝗇 𝗍𝗁𝖾 𝗌𝖺𝗆𝖾 𝖼𝗁𝖺𝗍. 𝖴𝗌𝖾 /add 𝗂𝗇 𝗍𝗁𝖾 𝖻𝗈𝗍 𝖣𝖬 𝖿𝗂𝗋𝗌𝗍, 𝗍𝗁𝖾𝗇 𝗋𝗎𝗇 𝖺 𝖼𝗈𝗆𝗆𝖺𝗇𝖽 𝗂𝗇 𝖺 𝖶𝗈𝗋𝖽𝖲𝖾𝖾𝗄 𝗀𝗋𝗈𝗎𝗉.</blockquote>",
-            parse_mode=enums.ParseMode.HTML,
-        )
 
     if is_private:
-        # Help is available directly in DMs; do not gate it behind force-join.
+        if not await _joined(client, message.from_user.id if message.from_user else (await client.get_me()).id):
+            return await _send_force_join(client, message)
         if not help_arg:
             return await message.reply_text(
                 HELP_MENU,
@@ -391,7 +351,7 @@ def _force_recordings_keyboard(user_id):
         rid = str(r.get("_id"))
         name = str(r.get("name", "Recording"))[:30]
         buttons.append([InlineKeyboardButton(f"{name}", callback_data=f"force_rcplay:{rid}")])
-    buttons.append([InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_menu")])
+    buttons.append([InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_menu")])
     return rows, InlineKeyboardMarkup(buttons)
 
 
@@ -449,7 +409,7 @@ async def force_callback(client, query):
         if not hosted:
             return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} <b>ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ɪs ɴᴏᴛ ᴏɴʟɪɴᴇ.</b></blockquote>", parse_mode=enums.ParseMode.HTML)
         if action == "addrc":
-            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} <b>ᴀᴅᴅʀᴄ</b>\n\nꜱᴇɴᴅ ᴀɴ ᴀᴜᴅɪᴏ / ᴠᴏɪᴄᴇ ᴛᴏ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ᴄʜᴀᴛ ᴏʀ ᴜsᴇ <code>.addrc</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
+            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} <b>ᴀᴅᴅʀᴄ</b>\n\nꜱᴇɴᴅ ᴀɴ ᴀᴜᴅɪᴏ / ᴠᴏɪᴄᴇ ᴛᴏ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ᴄʜᴀᴛ ᴏʀ ᴜsᴇ <code>.addrc</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
         if action in {"myrc", "rcinfo", "removerc"}:
             try:
                 from Waste.modules.bot.start import recordings_col
@@ -457,20 +417,20 @@ async def force_callback(client, query):
             except Exception:
                 rows = []
             if not rows:
-                return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} ɴᴏ sᴀᴠᴇᴅ ʀᴇᴄᴏʀᴅɪɴɢs.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
+                return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} ɴᴏ sᴀᴠᴇᴅ ʀᴇᴄᴏʀᴅɪɴɢs.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
             if action == "rcinfo":
                 text = "<blockquote>" + PE(PE_COMMAND) + " <b>ʀᴇᴄᴏʀᴅɪɴɢ ɪɴғᴏ</b>\n\n" + "\n".join(f"{i+1}. {r.get('name','Recording')} — {int(r.get('duration',0))}s" for i,r in enumerate(rows)) + "</blockquote>"
-                return await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
+                return await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
             buttons=[]
             for r in rows:
                 rid=str(r.get("_id")); name=str(r.get("name","Recording"))[:30]
                 cb = f"force_rcplay:{rid}" if action == "myrc" else f"force_rcdelete:{rid}"
                 buttons.append([InlineKeyboardButton(f"{name}", callback_data=cb)])
-            buttons.append([InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")])
-            title = "📂 ᴍʏ ʀᴇᴄᴏʀᴅɪɴɢs" if action == "myrc" else "🗑️ ʀᴇᴍᴏᴠᴇ ʀᴇᴄᴏʀᴅɪɴɢ"
+            buttons.append([InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")])
+            title = f"{PE(PE_COMMAND)} ᴍʏ ʀᴇᴄᴏʀᴅɪɴɢs" if action == "myrc" else f"{PE(PE_COMMAND)} ʀᴇᴍᴏᴠᴇ ʀᴇᴄᴏʀᴅɪɴɢ"
             return await query.message.edit_text(f"<blockquote>{PE(PE_COMMAND)} <b>{title}</b>\n\nꜱᴇʟᴇᴄᴛ ᴀ ʀᴇᴄᴏʀᴅɪɴɢ.</blockquote>", reply_markup=InlineKeyboardMarkup(buttons), parse_mode=enums.ParseMode.HTML)
         if action == "bass":
-            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} <b>ʙᴀss</b>\n\nᴜsᴇ <code>.bass 100</code> ᴛᴏ <code>.bass 500</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
+            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} <b>ʙᴀss</b>\n\nᴜsᴇ <code>.bass 100</code> ᴛᴏ <code>.bass 500</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
         return
     if query.data.startswith("force_rcdelete:"):
         await query.answer()
@@ -487,7 +447,7 @@ async def force_callback(client, query):
                 if rec.get("path") and os.path.exists(rec["path"]): os.remove(rec["path"])
             except Exception:
                 pass
-            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} ʀᴇᴄᴏʀᴅɪɴɢ ʀᴇᴍᴏᴠᴇᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
+            return await query.message.edit_text(f"<blockquote>{PE(PE_USER)} ʀᴇᴄᴏʀᴅɪɴɢ ʀᴇᴍᴏᴠᴇᴅ.</blockquote>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")]]), parse_mode=enums.ParseMode.HTML)
         except Exception as exc:
             return await query.answer(f"Delete failed: {type(exc).__name__}", show_alert=True)
     if query.data.startswith("force_rcplay:"):
@@ -503,10 +463,10 @@ async def force_callback(client, query):
             state, call = await _bridge(hosted)
             joined = sorted(list(state.joined))
             if not joined:
-                return await query.message.edit_text("<blockquote>❌ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ɪs ɴᴏᴛ ɪɴ ᴀɴʏ ᴠᴄ. ᴜsᴇ <code>.join &lt;chat_id&gt;</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ғɪʀsᴛ.</blockquote>", parse_mode=enums.ParseMode.HTML)
+                return await query.message.edit_text(f"<blockquote>{PE(PE_COMMAND)} ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ɪs ɴᴏᴛ ɪɴ ᴀɴʏ ᴠᴄ. ᴜsᴇ <code>.join &lt;chat_id&gt;</code> ᴏɴ ᴛʜᴇ ᴄᴏɴɴᴇᴄᴛᴇᴅ ɪᴅ ғɪʀsᴛ.</blockquote>", parse_mode=enums.ParseMode.HTML)
             kb=[[InlineKeyboardButton(f"ᴘʟᴀʏ ɪɴ {cid}", callback_data=f"force_vcplay:{rid}:{cid}")] for cid in joined]
-            kb.append([InlineKeyboardButton("ʙᴀᴄᴋ", callback_data="force_recordings")])
-            return await query.message.edit_text(f"<blockquote>{PE(PE_COMMAND)} <b>ᴄʜᴏᴏsᴇ ᴠᴄ</b>\n\n🎙️ {rec.get('name','Recording')}</blockquote>", reply_markup=InlineKeyboardMarkup(kb), parse_mode=enums.ParseMode.HTML)
+            kb.append([InlineKeyboardButton("𝙗𝙖𝙘𝙠", callback_data="force_recordings")])
+            return await query.message.edit_text(f"<blockquote>{PE(PE_COMMAND)} <b>ᴄʜᴏᴏsᴇ ᴠᴄ</b>\n\n{PE(PE_COMMAND)} {rec.get('name','Recording')}</blockquote>", reply_markup=InlineKeyboardMarkup(kb), parse_mode=enums.ParseMode.HTML)
         except Exception as exc:
             return await query.answer(f"Play menu failed: {type(exc).__name__}", show_alert=True)
     if query.data.startswith("force_vcplay:"):
